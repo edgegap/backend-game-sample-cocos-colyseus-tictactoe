@@ -1,7 +1,9 @@
 
-import { _decorator, Component, Node, systemEvent, SystemEvent, Vec2, Label, Color } from 'cc';
+import { _decorator, Component, Node, input, Input, Vec2, Label, Color, sys } from 'cc';
 import { Board } from './board';
 import Colyseus, { Room } from 'db://colyseus-sdk/colyseus.js';
+import { Matchmaker } from './edgegap/Matchmaker';
+import { joinWithRetry } from './edgegap/joinWithRetry';
 
 const { ccclass, property } = _decorator;
 @ccclass('SceneManager')
@@ -12,6 +14,16 @@ export class SceneManager extends Component {
     private serverURL : string = "localhost";
     @property
     private port : string = "2567";
+
+    // Edgegap: a page parameter wins over these fields, an explicit server over the matchmaker.
+    //   ?server=wss://<fqdn>:<port>          one direct deployment
+    //   ?mm=<matchmaker url>&mmToken=<token>  Find Match through the Edgegap matchmaker
+    @property({tooltip: "Edgegap matchmaker API URL. Empty = connect to serverURL:port."})
+    private matchmakerURL : string = "";
+    @property({tooltip: "Edgegap matchmaker Auth Token (client-safe: it can only create and read tickets)."})
+    private matchmakerToken : string = "";
+    @property
+    private matchmakerProfile : string = "casual";
 
     //UI Nodes
     @property({type:Node})
@@ -38,11 +50,16 @@ export class SceneManager extends Component {
     private client : Colyseus.Client | null = null;
     private room : Colyseus.Room | null = null;
     private countdownInterval : any;
+    private matchmaker : Matchmaker | null = null;
+    private lobbyText : Label | null = null;
 
     onLoad(){
-        let endpoint : string = `ws://${this.serverURL}:${this.port}`;
-        this.client = new Colyseus.Client(endpoint);
+        this.lobbyText = this.lobbyNode!.getComponentInChildren(Label);
         this.resetGame();
+    }
+
+    onDestroy(){
+        this.matchmaker?.cancel();
     }
 
     resetGame(){
@@ -52,11 +69,13 @@ export class SceneManager extends Component {
     }
 
     onEnable () {
-        systemEvent.on(SystemEvent.EventType.MOUSE_DOWN, this.handleMouseClick, this);
+        input.on(Input.EventType.MOUSE_DOWN, this.handleMouseClick, this);
+        input.on(Input.EventType.TOUCH_START, this.handleMouseClick, this);
     }
 
     onDisable(){
-        this.node.off('mousedown', this.handleMouseClick);
+        input.off(Input.EventType.MOUSE_DOWN, this.handleMouseClick, this);
+        input.off(Input.EventType.TOUCH_START, this.handleMouseClick, this);
     }
 
     handleGameState() {
@@ -78,38 +97,74 @@ export class SceneManager extends Component {
         }
     }
 
+    // Edgegap: where to connect. ?server= > matchmaker (page parameters, then inspector fields) > serverURL:port.
+    async findServer () : Promise<{ url: string, attempts: number }> {
+        const params = new URLSearchParams(sys.isBrowser ? window.location.search : "");
+        const direct = params.get("server");
+        if (direct) return { url: direct, attempts: 10 };
+
+        const mmUrl = params.get("mm") || this.matchmakerURL;
+        const mmToken = params.get("mmToken") || this.matchmakerToken;
+        if (mmUrl && mmToken) {
+            this.matchmaker = new Matchmaker({
+                url: mmUrl,
+                token: mmToken,
+                profile: params.get("profile") || this.matchmakerProfile,
+                onStatus: (status) => this.lobbyText!.string = status,
+            });
+            const url = await this.matchmaker.findMatch();
+            this.matchmaker = null;
+            // A server that just started answers 502 for a few seconds: retry the first join.
+            return { url, attempts: 10 };
+        }
+
+        const secure = sys.isBrowser && window.location.protocol === "https:";
+        return { url: `${secure ? "wss" : "ws"}://${this.serverURL}:${this.port}`, attempts: 1 };
+    }
+
     async connect () {
         console.log("Joining game...");
-        this.room = await this.client!.joinOrCreate("tictactoe");
-    
+        try {
+            const { url, attempts } = await this.findServer();
+            this.lobbyText!.string = "Waiting for an opponent...";
+            this.client = new Colyseus.Client(url);
+            this.room = await joinWithRetry(this.client, "tictactoe", {}, attempts);
+        } catch (e: any) {
+            console.error(e);
+            this.showEndgame(e?.message?.includes("expired") ? "No opponent found, try again" : "Could not connect, sorry!");
+            return;
+        }
+
+        // Colyseus 0.17 state callbacks
+        const $ = Colyseus.Callbacks.get(this.room);
+
         let numPlayers = 0;
-        this.room.state.players.onAdd = () => {
+        $.onAdd("players", () => {
           numPlayers++;
-    
+
           if (numPlayers === 2) {
             this.onJoin();
           }
-        }
+        });
 
-        this.room.state.board.onChange = (value: number, index: number) => {
+        // 0.17 passes (index, value) for array items; 0.14 passed (value, index).
+        $.onChange("board", (index: number, value: number) => {
+            if (!value) return; // empty cell
             const x = index % 3;
             const y = Math.floor(index / 3);
             this.board!.set(x, y, value);
-          }
-      
-          this.room.state.listen("currentTurn", (sessionId: string ) => {
+          });
+
+          $.listen("currentTurn", (sessionId: string ) => {
+            if (!sessionId) return;
             // go to next turn after a little delay, to ensure "onJoin" gets called before this.
             setTimeout(() => this.nextTurn(sessionId), 10);
           });
-      
-          this.room.state.listen("draw", () => this.showEndgame("Draw!"));
-          this.room.state.listen("winner", (sessionId: string) => this.showEndgame(this.room!.sessionId == sessionId ? "You win!" : "You lose!"));
-      
-          this.room.state.onChange = (changes: any) => {
-            console.log("state.onChange =>", changes);
-          }
-      
-          this.room.onError.once(() => {
+
+          $.listen("draw", (draw: boolean) => draw && this.showEndgame("Draw!"));
+          $.listen("winner", (sessionId: string) => sessionId && this.showEndgame(this.room!.sessionId == sessionId ? "You win!" : "You lose!"));
+
+          this.room.onError(() => {
             this.showEndgame("And error has occurred, sorry!");
           });
     }
@@ -119,7 +174,9 @@ export class SceneManager extends Component {
     }
 
     showEndgame(message : string){
-        this.room!.leave()
+        if (this.gameState == "ENDGAME") return;
+        this.room?.leave()
+        this.room = null;
         this.resultsText!.string = message;
         this.gameState = "ENDGAME";
         this.handleGameState();
