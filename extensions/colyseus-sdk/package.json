@@ -1,7 +1,7 @@
 {
     "name": "colyseus-sdk",
     "package_version": 2,
-    "version": "0.14.0",
+    "version": "0.17.43",
     "description": "Colyseus Multiplayer SDK for Cocos Creator",
     "author": "Lucid Sight, Inc.",
     "main": "browser.js",

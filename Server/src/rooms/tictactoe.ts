@@ -1,28 +1,33 @@
 import { Room, Delayed, Client } from 'colyseus';
 import { type, Schema, MapSchema, ArraySchema } from '@colyseus/schema';
+import { playerJoined, playerLeft, selfStop } from '../edgegap';
 
 const TURN_TIMEOUT = 10
 const BOARD_WIDTH = 3;
+// Seconds the result stays on screen before the server closes the match (and, on Edgegap, stops itself).
+const RESULT_DELAY = 5;
 
 class State extends Schema {
-  @type("string") currentTurn: string;
+  @type("string") currentTurn!: string;
   @type({ map: "boolean" }) players = new MapSchema<boolean>();
   @type(["number"]) board: number[] = new ArraySchema<number>(0, 0, 0, 0, 0, 0, 0, 0, 0);
-  @type("string") winner: string;
-  @type("boolean") draw: boolean;
+  @type("string") winner!: string;
+  @type("boolean") draw!: boolean;
 }
 
-export class TicTacToe extends Room<State> {
+export class TicTacToe extends Room {
   maxClients = 2;
-  randomMoveTimeout: Delayed;
+  state = new State();
+  randomMoveTimeout?: Delayed;
+  ended = false;
 
   onCreate () {
-    this.setState(new State());
     this.onMessage("action", (client, message) => this.playerAction(client, message));
     console.log("Room Created!");
   }
 
   onJoin (client: Client) {
+    playerJoined();
     this.state.players.set(client.sessionId, true);
 
     if (this.state.players.size === 2) {
@@ -50,9 +55,11 @@ export class TicTacToe extends Room<State> {
 
         if (this.checkWin(data.x, data.y, move)) {
           this.state.winner = client.sessionId;
+          this.endMatch();
 
         } else if (this.checkBoardComplete()) {
           this.state.draw = true;
+          this.endMatch();
 
         } else {
           // switch turn
@@ -141,6 +148,7 @@ export class TicTacToe extends Room<State> {
   }
 
   onLeave (client: Client) {
+    playerLeft();
     this.state.players.delete(client.sessionId);
 
     if (this.randomMoveTimeout) {
@@ -148,9 +156,23 @@ export class TicTacToe extends Room<State> {
     }
 
     let remainingPlayerIds = Array.from(this.state.players.keys());
-    if (remainingPlayerIds.length > 0) {
+    if (remainingPlayerIds.length > 0 && !this.ended) {
       this.state.winner = remainingPlayerIds[0]
+      this.endMatch();
     }
+  }
+
+  // One room per Edgegap deployment: when the game is decided, show the result, close the room and
+  // stop the deployment. Locally (no Edgegap env) selfStop does nothing and the server keeps running.
+  endMatch () {
+    if (this.ended) return;
+    this.ended = true;
+    this.randomMoveTimeout?.clear();
+    this.lock();
+    this.clock.setTimeout(async () => {
+      await this.disconnect();
+      selfStop('match over');
+    }, RESULT_DELAY * 1000);
   }
 
 }
