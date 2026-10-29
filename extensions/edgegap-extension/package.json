@@ -1,0 +1,63 @@
+{
+    "package_version": 2,
+    "version": "2.0.0",
+    "name": "edgegap-extension",
+    "title": "Edgegap Servers Quickstart",
+    "description": "i18n:edgegap-extension.description",
+    "author": "Edgegap",
+    "editor": ">=3.8.0",
+    "main": "./dist/main.js",
+    "panels": {
+        "default": {
+            "title": "Edgegap",
+            "type": "dockable",
+            "main": "dist/panels/default",
+            "size": {
+                "min-width": 400,
+                "min-height": 500,
+                "width": 520,
+                "height": 900
+            }
+        }
+    },
+    "contributions": {
+        "menu": [
+            {
+                "path": "i18n:menu.extension/Edgegap",
+                "label": "i18n:edgegap-extension.open_panel",
+                "message": "open-panel"
+            },
+            {
+                "path": "i18n:menu.extension/Edgegap",
+                "label": "i18n:edgegap-extension.open_dashboard",
+                "message": "open-dashboard"
+            },
+            {
+                "path": "i18n:menu.extension/Edgegap",
+                "label": "i18n:edgegap-extension.open_docs",
+                "message": "open-docs"
+            }
+        ],
+        "messages": {
+            "open-panel": { "methods": ["openPanel"] },
+            "open-dashboard": { "methods": ["openDashboard"] },
+            "open-docs": { "methods": ["openDocs"] }
+        },
+        "asset-db": {
+            "mount": {
+                "path": "./assets",
+                "readonly": true
+            }
+        }
+    },
+    "scripts": {
+        "build": "tsc -p .",
+        "watch": "tsc -p . -w",
+        "e2e": "node scripts/e2e.mjs"
+    },
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "electron": "31.3.1",
+        "typescript": "^5.4.0"
+    }
+}

@@ -1,0 +1,18 @@
+{
+  "__version__": "1.0.0",
+  "server": {
+    "serverDir": "Server",
+    "imageName": "cocos-tictactoe",
+    "tag": "20261029-1923",
+    "app": "cocos-tictactoe",
+    "port": {
+      "name": "gameport",
+      "port": 2567,
+      "protocol": "WS",
+      "tlsUpgrade": true
+    },
+    "cpuUnits": 256,
+    "memoryMb": 512,
+    "maxDurationMinutes": 60
+  }
+}

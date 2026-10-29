@@ -13,7 +13,7 @@
       "group_inactivity_removal_period": "5m",
       "application": {
         "name": "cocos-tictactoe",
-        "version": "20261029-1554"
+        "version": "20261029-1923"
       },
       "rules": {
         "initial": {
