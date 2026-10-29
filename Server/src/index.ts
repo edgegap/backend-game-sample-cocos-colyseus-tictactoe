@@ -1,15 +1,22 @@
-/**
- * IMPORTANT: 
- * ---------
- * Do not manually edit this file if you'd like to use Colyseus Arena
- * 
- * If you're self-hosting (without Arena), you can manually instantiate a
- * Colyseus Server as documented here: 👉 https://docs.colyseus.io/server/api/#constructor-options 
- */
-import { listen } from "@colyseus/arena";
+import { defineRoom, defineServer, playground, monitor } from "colyseus";
+import { TicTacToe } from "./rooms/tictactoe";
+import { onEdgegap, startLifecycle } from "./edgegap";
 
-// Import arena config
-import arenaConfig from "./arena.config";
+const port = parseInt(process.env.PORT || "2567");
 
-// Create and listen on 2567 (or PORT environment variable.)
-listen(arenaConfig);
+const server = defineServer({
+  rooms: {
+    tictactoe: defineRoom(TicTacToe),
+  },
+  express: (app) => {
+    // Dev tools stay off on Edgegap: a match server only needs the matchmake route and WebSocket.
+    if (onEdgegap) return;
+    app.use("/", playground());
+    app.use("/monitor", monitor());
+  },
+});
+
+server.listen(port).then(() => {
+  console.log(`Tic Tac Toe server listening on http://localhost:${port}`);
+  startLifecycle();
+});
