@@ -15,7 +15,7 @@ exports.methods = {
         electron_1.shell.openExternal(`https://app.edgegap.com/?${UTM}`);
     },
     openDocs() {
-        electron_1.shell.openExternal(`https://github.com/edgegap/edgegap-cocos-plugin#readme`);
+        electron_1.shell.openExternal(`https://github.com/edgegap/buildtool-cocos-plugin#readme`);
     },
 };
 function load() { }

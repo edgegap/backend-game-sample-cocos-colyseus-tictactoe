@@ -15,16 +15,16 @@ Changes from upstream:
 | Colyseus | 0.14 (Arena) | 0.17 (`defineServer`), SDK 0.17.43 in `extensions/colyseus-sdk` |
 | Hosting | one server, many rooms | one Edgegap deployment per match, stops itself |
 | Finding a game | `joinOrCreate` on `localhost:2567` | Edgegap matchmaker, or a direct `?server=` URL, or `localhost:2567` |
-| Server build and upload | - | [Edgegap Cocos extension](https://github.com/edgegap/edgegap-cocos-plugin) 2.0 in `extensions/edgegap-extension`, preconfigured |
+| Server build and upload | - | [Edgegap Cocos extension](https://github.com/edgegap/buildtool-cocos-plugin) 2.0 in `extensions/edgegap-extension`, preconfigured |
 
-Verified on 2026-10-29: two Node bots matched through the matchmaker and finished a game on one deployment; the Cocos web build (web-desktop, Chrome) was matched with a bot, played a game to "You win!", and the deployment stopped itself after the match. The server image and version `cocos-tictactoe/20261029-1923` were then built, pushed, created and test-deployed by the Edgegap Cocos extension's steps (headless, `scripts/e2e.mjs` of the extension), and two bots played a game on that deployment over `wss://`. Not run: Cocos mini-game, native and mobile builds, the web-mobile template, direct mode on Edgegap (the e2e script supports it).
+Verified on 2026-10-29: two Node bots matched through the matchmaker and finished a game on one deployment; the Cocos web build (web-desktop, Chrome) was matched with a bot, played a game to "You win!", and the deployment stopped itself after the match. The server image and version `cocos-tictactoe/20261029-1923` were then built, pushed, created and test-deployed by the Edgegap Cocos extension's steps (headless, `scripts/e2e.mjs` of the extension), and two bots played a game on that deployment over `wss://`. A direct deployment (version `20261127-1529`) and a matchmaker ticket pair were played to the end by the same two bots on 2026-11-27, and each deployment stopped itself.
 
 ## Files
 
 - `Server/src/edgegap.ts`: lifecycle. On Edgegap (`ARBITRIUM_REQUEST_ID` set) the server stops its deployment when nobody joins within 120 s, when it has been empty for 30 s, or when the match ends. Locally none of it runs.
 - `Server/src/rooms/tictactoe.ts`: upstream room plus `playerJoined()` / `playerLeft()` and `endMatch()` (lock, show the result for 5 s, disconnect, `selfStop`).
 - `Server/src/index.ts`: Colyseus 0.17 entry; playground and monitor only off Edgegap.
-- `extensions/edgegap-extension/`: the [Edgegap Cocos extension](https://github.com/edgegap/edgegap-cocos-plugin) (build, test, upload, deploy); its settings for this project are in `settings/v2/packages/edgegap-extension.json`.
+- `extensions/edgegap-extension/`: the [Edgegap Cocos extension](https://github.com/edgegap/buildtool-cocos-plugin) (build, test, upload, deploy); its settings for this project are in `settings/v2/packages/edgegap-extension.json`.
 - `Server/Dockerfile` (the extension builds it), `Server/scripts/e2e.mjs` (bots), `Server/scripts/edgegap-deploy.mjs` (one direct deployment from a script).
 - `assets/scripts/edgegap/Matchmaker.ts`, `joinWithRetry.ts`: matchmaker ticket client and the first-join retry (a fresh deployment answers 502 for a few seconds).
 - `assets/scripts/SceneManager.ts`: picks where to connect, and the Colyseus 0.17 state callbacks.
